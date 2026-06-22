@@ -1,0 +1,41 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\andre\\Downloads\\secure-ipfs-workshop\\secure-ipfs-workshop\\contracts\\SecureRegistry.sol": {
+      "lastModificationDate": 1782148697499,
+      "contentHash": "57847ee12fd59dd1d3936cfc0de16b10",
+      "sourceName": "contracts/SecureRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SecureRegistry"
+      ]
+    }
+  }
+}
