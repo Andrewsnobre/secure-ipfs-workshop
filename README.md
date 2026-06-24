@@ -112,19 +112,24 @@ O arquivo original nunca sai do dispositivo do usuário.
 
 ### 6. Proteção da Chave Pós-Quântica
 
-A chave privada ML-KEM é protegida utilizando uma chave derivada da wallet.
+A chave privada ML-KEM é protegida (wrapped) com uma chave AES derivada de uma
+**assinatura da wallet**, não de dados públicos.
 
 ```text
-Wallet
+Wallet assina mensagem (personal_sign, ECDSA determinística)
 ↓
-Wallet Wrapping Key
+HKDF-SHA256(assinatura, salt = chainId + endereço)
+↓
+Wallet Wrapping Key (AES-256-GCM)
 ↓
 Private Key ML-KEM Protegida
 ```
 
-Dessa forma:
+A assinatura só pode ser produzida por quem controla a chave privada da wallet.
+O endereço e o chainId entram apenas como *domain separation* (salt), nunca como
+segredo. Dessa forma:
 
-- Apenas a mesma wallet consegue recuperar a chave.
+- Apenas a mesma wallet consegue reproduzir a assinatura e recuperar a chave.
 - O backend não possui acesso à chave.
 - O IPFS não possui acesso à chave.
 
@@ -228,6 +233,19 @@ Edite `backend/.env`:
 PORT=3333
 IPFS_UPLOAD_URL=https://api.ipfs.com.br/upload
 IPFS_AUTH_KEY=SUA_CHAVE
+
+# Origens autorizadas a chamar o backend (CORS)
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# Tamanho máximo de upload em bytes (padrão 10 MB)
+MAX_UPLOAD_BYTES=10485760
+
+# Requisições por minuto por IP (padrão 30)
+RATE_LIMIT_MAX=30
+
+# Token opcional: se definido, o cliente deve enviar o header x-upload-token.
+# Vazio = proxy aberto (apenas uso local).
+UPLOAD_ACCESS_TOKEN=
 ```
 
 ### Executar blockchain local
@@ -256,7 +274,14 @@ Edite `frontend/.env`:
 ```env
 VITE_BACKEND_URL=http://localhost:3333
 VITE_CONTRACT_ADDRESS=ENDERECO_DO_CONTRATO
+
+# Opcional: deve ser igual ao UPLOAD_ACCESS_TOKEN do backend, se definido
+VITE_UPLOAD_TOKEN=
 ```
+
+> Importante: o Vite só lê o `.env` na inicialização. Se alterar o
+> `VITE_CONTRACT_ADDRESS` (por exemplo após reimplantar o contrato), **reinicie
+> o dev server do frontend**.
 
 ### Executar aplicação
 
@@ -334,6 +359,25 @@ onde um atacante coleta dados hoje para tentar quebrá-los futuramente utilizand
 - O IPFS recebe apenas conteúdo criptografado.
 - Apenas a wallet do usuário consegue recuperar o arquivo.
 
+### Proteções do Backend (Proxy IPFS)
+
+- **CORS** restrito a uma allowlist (`ALLOWED_ORIGINS`).
+- **Limite de tamanho** de upload (`MAX_UPLOAD_BYTES`) para evitar DoS por memória.
+- **Rate limiting** por IP (`RATE_LIMIT_MAX`).
+- **Token de acesso** opcional (`UPLOAD_ACCESS_TOKEN` / header `x-upload-token`).
+- Erros não vazam stack traces ao cliente.
+
+### Limitações conhecidas
+
+Projeto **educacional**. Antes de uso em produção, considere:
+
+- O registro on-chain (`register`) é suscetível a *front-running* no mempool;
+  para produção use um esquema *commit-reveal*.
+- Conteúdo no IPFS é público e permanente — a confidencialidade depende
+  inteiramente da criptografia client-side.
+- O proxy de upload deve rodar com `UPLOAD_ACCESS_TOKEN` definido em qualquer
+  deploy exposto à internet.
+
 ---
 
 ## Tecnologias
@@ -352,4 +396,3 @@ onde um atacante coleta dados hoje para tentar quebrá-los futuramente utilizand
 ## Licença
 
 MIT
-````
