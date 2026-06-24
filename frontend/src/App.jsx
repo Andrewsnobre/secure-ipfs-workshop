@@ -127,6 +127,14 @@ export default function App() {
     }
   }
 
+  function handleLockIdentity() {
+    setIdentity(null);
+    setBalanceWei(null);
+    setAddress("");
+    setMyFiles([]);
+    setStatus("Identidade PQ bloqueada (removida da memória).");
+  }
+
   function handleResetIdentity() {
     if (
       !window.confirm(
@@ -333,7 +341,12 @@ export default function App() {
           )}
           {identity && (
             <button className="secondary" onClick={handleFundWallet}>
-              Financiar wallet (dev)
+              Financiar com 1 ETH
+            </button>
+          )}
+          {identity && (
+            <button className="secondary" onClick={handleLockIdentity}>
+              Bloquear
             </button>
           )}
           {pqExists && (
