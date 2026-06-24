@@ -5,23 +5,43 @@ const encoder = new TextEncoder();
 
 async function deriveWalletWrappingKey(signer) {
     const address = await signer.getAddress();
-
-    await signer.signMessage(
-        `Secure IPFS Registry\nWallet: ${address}\nPurpose: authorize-pqc-file-encryption-v2`
-    );
-
     const network = await signer.provider.getNetwork();
 
-    const material = ethers.toUtf8Bytes(
-        `secure-ipfs-wallet-wrap-v2:${network.chainId.toString()}:${address.toLowerCase()}`
+    // The wrapping key MUST come from a secret only this wallet can produce.
+    // personal_sign uses deterministic ECDSA (RFC 6979), so signing the same
+    // message with the same key always yields the same signature: we use that
+    // signature as the key material. The address/chainId are bound into the
+    // message (and the HKDF salt) for domain separation, but they are NOT the
+    // secret — the secret is the signature itself.
+    const signature = await signer.signMessage(
+        `Secure IPFS Registry\nWallet: ${address}\nChain: ${network.chainId.toString()}\nPurpose: authorize-pqc-file-encryption-v3`
     );
 
-    const rawKey = await crypto.subtle.digest("SHA-256", material);
+    const signatureBytes = ethers.getBytes(signature);
 
-    return await crypto.subtle.importKey(
+    // Import the signature as HKDF input keying material, then derive a
+    // dedicated AES-256-GCM key from it.
+    const ikm = await crypto.subtle.importKey(
         "raw",
-        rawKey,
-        { name: "AES-GCM" },
+        signatureBytes,
+        "HKDF",
+        false,
+        ["deriveKey"]
+    );
+
+    const salt = ethers.toUtf8Bytes(
+        `secure-ipfs-wallet-wrap-v3:${network.chainId.toString()}:${address.toLowerCase()}`
+    );
+
+    return await crypto.subtle.deriveKey(
+        {
+            name: "HKDF",
+            hash: "SHA-256",
+            salt,
+            info: encoder.encode("wallet-wrapped-mlkem-private-key"),
+        },
+        ikm,
+        { name: "AES-GCM", length: 256 },
         false,
         ["encrypt", "decrypt"]
     );
@@ -85,8 +105,8 @@ export async function encryptFilePQCWithWallet(file, signer) {
     const wrappedPrivateKey = await encryptBytesWithWallet(privateKey, signer);
 
     return JSON.stringify({
-        version: "wallet-mlkem768-aes256gcm-v2",
-        algorithm: "ML-KEM-768 + AES-256-GCM + Wallet-wrapped private key",
+        version: "wallet-mlkem768-aes256gcm-v3",
+        algorithm: "ML-KEM-768 + AES-256-GCM + signature-derived wallet-wrapped private key",
         publicKey: Array.from(publicKey),
         wrappedPrivateKey,
         kemCiphertext: Array.from(kemCiphertext),

@@ -12,8 +12,15 @@ export async function uploadEncryptedToIPFS(encryptedContent) {
 
   formData.append("file", file);
 
+  const headers = {};
+  const uploadToken = import.meta.env.VITE_UPLOAD_TOKEN;
+  if (uploadToken) {
+    headers["x-upload-token"] = uploadToken;
+  }
+
   const res = await fetch(`${BACKEND_URL}/upload`, {
     method: "POST",
+    headers,
     body: formData,
   });
 
