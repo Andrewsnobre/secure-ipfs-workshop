@@ -302,7 +302,12 @@ export default function App() {
       </section>
 
       <section className="card">
-        <h2>0. Identidade Pós-Quântica</h2>
+        <h2>
+          0. Identidade Pós-Quântica{" "}
+          <span className={`pill ${identity ? "ok" : pqExists ? "warn" : "muted"}`}>
+            {identity ? "Desbloqueada" : pqExists ? "Bloqueada" : "Inexistente"}
+          </span>
+        </h2>
         <p className="status">
           {identity
             ? "Identidade desbloqueada (em memória)."
@@ -319,7 +324,7 @@ export default function App() {
           placeholder="mínimo 8 caracteres"
         />
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+        <div className="btn-row">
           {!pqExists && (
             <button onClick={handleCreateIdentity}>Criar identidade PQ</button>
           )}
@@ -327,34 +332,42 @@ export default function App() {
             <button onClick={handleUnlockIdentity}>Desbloquear</button>
           )}
           {identity && (
-            <button onClick={handleFundWallet}>Financiar wallet (dev)</button>
+            <button className="secondary" onClick={handleFundWallet}>
+              Financiar wallet (dev)
+            </button>
           )}
           {pqExists && (
-            <button onClick={handleResetIdentity}>Apagar deste dispositivo</button>
+            <button className="ghost" onClick={handleResetIdentity}>
+              Apagar deste dispositivo
+            </button>
           )}
         </div>
 
         {identity?.ethAddress && (
           <>
-            <p style={{ marginTop: 8 }}>
-              <b>Wallet interna (do mnemônico):</b> {identity.ethAddress}
+            <p className="kv">
+              <b>Wallet interna</b>
+              <span className="mono">{identity.ethAddress}</span>
             </p>
-            <p>
-              <b>Saldo:</b>{" "}
-              {balanceWei === null
-                ? "—"
-                : `${ethers.formatEther(balanceWei)} ETH`}{" "}
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              <span className={`pill ${hasFunds ? "ok" : "warn"}`}>
+                Saldo:{" "}
+                {balanceWei === null
+                  ? "—"
+                  : `${ethers.formatEther(balanceWei)} ETH`}
+              </span>
               <button
+                className="secondary"
                 onClick={() =>
                   refreshBalance(identity.ethAddress, identity.ethWallet.provider)
                 }
               >
                 Atualizar
               </button>
-            </p>
+            </div>
             {!hasFunds && (
-              <p className="status">
-                ⚠️ Sem saldo para gás — financie a wallet para poder registrar
+              <p className="warn-text">
+                Sem saldo para gás — financie a wallet para poder registrar
                 on-chain.
               </p>
             )}
@@ -362,22 +375,22 @@ export default function App() {
         )}
 
         {mnemonicBackup && (
-          <div className="card success" style={{ marginTop: 12 }}>
+          <div className="card success" style={{ marginTop: 16 }}>
             <h3>⚠️ Anote estas 24 palavras (backup único)</h3>
-            <p style={{ wordSpacing: 4, lineHeight: 1.8 }}>
-              <b>{mnemonicBackup}</b>
+            <p className="mono" style={{ wordSpacing: 4, lineHeight: 1.9, display: "block" }}>
+              {mnemonicBackup}
             </p>
-            <p>
+            <p style={{ color: "var(--muted)", fontSize: 14 }}>
               Quem tiver estas palavras pode descriptografar seus arquivos. Sem
               elas, a perda é irreversível.
             </p>
-            <button onClick={() => setMnemonicBackup("")}>
+            <button className="secondary" onClick={() => setMnemonicBackup("")}>
               Guardei minhas palavras
             </button>
           </div>
         )}
 
-        <details style={{ marginTop: 12 }}>
+        <details>
           <summary>Restaurar de um mnemônico</summary>
           <label>Mnemônico (24 palavras)</label>
           <textarea
@@ -412,7 +425,7 @@ export default function App() {
             Criptografar (PQ) + IPFS + Blockchain
           </button>
           {identity && !hasFunds && (
-            <p className="status">Wallet sem saldo: financie para habilitar.</p>
+            <p className="warn-text">Wallet sem saldo: financie para habilitar.</p>
           )}
         </div>
 
@@ -430,32 +443,35 @@ export default function App() {
       <section className="card">
         <h2>Status</h2>
         <p className="status">{status}</p>
-        {address && <p><b>Wallet:</b> {address}</p>}
-        {cid && <p><b>CID:</b> {cid}</p>}
-        {fileHash && <p><b>Hash:</b> {fileHash}</p>}
+        {address && <p className="kv"><b>Wallet</b><span className="mono">{address}</span></p>}
+        {cid && <p className="kv"><b>CID</b><span className="mono">{cid}</span></p>}
+        {fileHash && <p className="kv"><b>Hash</b><span className="mono">{fileHash}</span></p>}
       </section>
 
       <section className="card">
         <h2>Meus Arquivos</h2>
-        <button onClick={loadMyFiles}>Carregar meus arquivos</button>
+        <button className="secondary" onClick={loadMyFiles}>
+          Carregar meus arquivos
+        </button>
 
         {myFiles.map((item) => (
           <div key={item.hash} className="record-item">
-            <p><b>Hash:</b> {item.hash}</p>
-            <p><b>CID:</b> {item.cid}</p>
-            <p><b>Owner:</b> {item.owner}</p>
-            <p><b>Data:</b> {item.timestamp}</p>
-            <a
-              href={`https://ipfs.io/ipfs/${item.cid}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir no IPFS
-            </a>
-            <br />
-            <button onClick={() => recoverFile(item.cid)}>
-              Recuperar arquivo (identidade PQ)
-            </button>
+            <p className="kv"><b>Hash</b><span className="mono">{item.hash}</span></p>
+            <p className="kv"><b>CID</b><span className="mono">{item.cid}</span></p>
+            <p className="kv"><b>Owner</b><span className="mono">{item.owner}</span></p>
+            <p className="kv"><b>Data</b>{item.timestamp}</p>
+            <div className="btn-row">
+              <a
+                href={`https://ipfs.io/ipfs/${item.cid}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Abrir no IPFS
+              </a>
+              <button onClick={() => recoverFile(item.cid)}>
+                Recuperar arquivo (identidade PQ)
+              </button>
+            </div>
           </div>
         ))}
       </section>
@@ -463,9 +479,9 @@ export default function App() {
       {record && (
         <section className="card success">
           <h2>Registro on-chain</h2>
-          <p><b>CID:</b> {record.cid}</p>
-          <p><b>Owner:</b> {record.owner}</p>
-          <p><b>Timestamp:</b> {record.timestamp}</p>
+          <p className="kv"><b>CID</b><span className="mono">{record.cid}</span></p>
+          <p className="kv"><b>Owner</b><span className="mono">{record.owner}</span></p>
+          <p className="kv"><b>Timestamp</b>{record.timestamp}</p>
         </section>
       )}
     </main>
