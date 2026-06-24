@@ -7,22 +7,24 @@ Demo desenvolvido para o workshop:
 ## Arquitetura
 
 ```text
-Arquivo
-↓
-Criptografia Client-Side
-↓
-ML-KEM-768 (Pós-Quântico)
-↓
-AES-256-GCM
-↓
-IPFS
-↓
-Hash do Conteúdo Criptografado
-↓
-Blockchain Registry
+                 Mnemônico BIP-39 (24 palavras)
+                  │                       │
+   ML-KEM-768 ◄───┘                       └───► Wallet Ethereum (secp256k1)
+        │                                              │
+        ▼                                              │
+Arquivo → AES-256-GCM (chave via ML-KEM)               │
+        ▼                                              │
+       IPFS → CID                                      │
+        ▼                                              ▼
+Hash do conteúdo cifrado ──────────────────► Smart Contract (dono + CID)
 ```
 
 Todo o processo de criptografia ocorre no navegador.
+
+**Um único mnemônico**, dois usos derivados dele:
+
+- **Camada Pós-Quântica** (ML-KEM-768) → confidencialidade dos arquivos.
+- **Wallet Ethereum** → identidade/propriedade on-chain (derivada do mnemônico).
 
 O backend atua apenas como proxy para proteger a chave de acesso ao serviço IPFS.
 
@@ -30,35 +32,54 @@ O backend atua apenas como proxy para proteger a chave de acesso ao serviço IPF
 
 ## Fluxo Completo
 
-### 1. Conexão da Wallet
+### 1. Identidade única
 
-O usuário conecta sua wallet Web3 (MetaMask).
+O app gera **um único mnemônico** que serve de raiz para tudo:
 
 ```text
-MetaMask
-↓
-Autenticação do Usuário
+Mnemônico BIP-39 (24 palavras)
+   ├── caminho BIP-44 (m/44'/60'/0'/0/0) → wallet Ethereum (secp256k1) → assina on-chain
+   └── HKDF "...mlkem768-seed"           → chave ML-KEM-768            → cifra arquivos
 ```
 
-A wallet é utilizada para proteger o acesso ao material criptográfico utilizado na recuperação dos arquivos.
+- A **wallet Ethereum** é derivada do mnemônico e conectada direto ao RPC
+  (`VITE_RPC_URL`, padrão `http://127.0.0.1:8545`).
+- Na rede local, use **Financiar wallet (dev)** para dar gás à wallet. O app
+  mostra o **saldo** e só habilita o botão de criptografar quando há saldo > 0.
+
+> A parte on-chain continua usando ECDSA (o Ethereum só aceita secp256k1), mas
+> isso é aceitável: os dados on-chain (CID, hash, dono) são **públicos**.
+> Quebrar a ECDSA permitiria personificar a conta on-chain, **não** descriptografar
+> arquivos — a confidencialidade é responsabilidade da camada PQ (passo 2).
 
 ---
 
-### 2. Geração das Chaves Pós-Quânticas
+### 2. Camada Pós-Quântica (confidencialidade)
 
-O navegador gera um par de chaves utilizando:
-
-```text
-ML-KEM-768 (FIPS 203)
-```
-
-Algoritmo padronizado pelo NIST para proteção contra ataques de computadores quânticos.
+Do mesmo mnemônico deriva-se a chave de cifração:
 
 ```text
-Public Key
-+
-Private Key
+Mnemônico → seed (64 bytes via HKDF) → ML-KEM-768 (FIPS 203) → par de chaves
 ```
+
+- A chave privada ML-KEM é **derivada deterministicamente** do mnemônico — **não**
+  é armazenada no IPFS.
+- Como o mnemônico não pode ser reconstruído a partir da chave secp256k1 exposta
+  on-chain (derivação unidirecional), **um atacante quântico que quebre a ECDSA
+  não recupera os arquivos**.
+
+Proteção em repouso (no dispositivo):
+
+```text
+Passphrase do usuário
+↓
+Argon2id (KDF memory-hard, resistente a quântico)
+↓
+AES-256-GCM → mnemônico cifrado no localStorage
+```
+
+A chave pública fica em claro (para cifrar arquivos sem desbloquear); o
+mnemônico só é decifrado ao informar a passphrase.
 
 ---
 
@@ -110,28 +131,22 @@ O arquivo original nunca sai do dispositivo do usuário.
 
 ---
 
-### 6. Proteção da Chave Pós-Quântica
+### 6. O que vai para o IPFS
 
-A chave privada ML-KEM é protegida (wrapped) com uma chave AES derivada de uma
-**assinatura da wallet**, não de dados públicos.
+O payload cifrado contém **apenas** o necessário para quem tem a chave privada
+ML-KEM (ou seja, a identidade) decifrar:
 
 ```text
-Wallet assina mensagem (personal_sign, ECDSA determinística)
-↓
-HKDF-SHA256(assinatura, salt = chainId + endereço)
-↓
-Wallet Wrapping Key (AES-256-GCM)
-↓
-Private Key ML-KEM Protegida
+{ kemCiphertext, fileIv, encryptedFile, originalName, mimeType }
 ```
 
-A assinatura só pode ser produzida por quem controla a chave privada da wallet.
-O endereço e o chainId entram apenas como *domain separation* (salt), nunca como
-segredo. Dessa forma:
+A **chave privada NUNCA é armazenada** no payload — diferente de desenhos onde a
+chave privada viaja embrulhada junto do arquivo. Assim:
 
-- Apenas a mesma wallet consegue reproduzir a assinatura e recuperar a chave.
-- O backend não possui acesso à chave.
-- O IPFS não possui acesso à chave.
+- A confidencialidade depende só da identidade PQ (mnemônico + passphrase).
+- O backend não possui acesso à chave nem ao conteúdo.
+- O IPFS recebe apenas o conteúdo cifrado.
+- Quebrar a wallet (ECDSA) **não** dá acesso aos arquivos.
 
 ---
 
@@ -180,20 +195,23 @@ Registro Imutável
 Quando o usuário deseja recuperar o arquivo:
 
 ```text
-Wallet
+Passphrase
 ↓
-Desprotege Private Key ML-KEM
+Argon2id desbloqueia o mnemônico (localStorage)
 ↓
-Recupera Shared Secret
+Deriva Private Key ML-KEM
 ↓
-Reconstrói AES-256-GCM
+decap(kemCiphertext) → Shared Secret
+↓
+Reconstrói chave AES-256-GCM
 ↓
 Descriptografa Arquivo
 ↓
 Download
 ```
 
-Somente a wallet correta consegue realizar esse processo.
+Somente quem tem a identidade PQ (mnemônico + passphrase) consegue realizar esse
+processo.
 
 ---
 
@@ -275,6 +293,9 @@ Edite `frontend/.env`:
 VITE_BACKEND_URL=http://localhost:3333
 VITE_CONTRACT_ADDRESS=ENDERECO_DO_CONTRATO
 
+# RPC para a wallet interna derivada do mnemônico
+VITE_RPC_URL=http://127.0.0.1:8545
+
 # Opcional: deve ser igual ao UPLOAD_ACCESS_TOKEN do backend, se definido
 VITE_UPLOAD_TOKEN=
 ```
@@ -297,23 +318,32 @@ Frontend:
 npm run frontend
 ```
 
+### Primeiro uso
+
+1. No app, em **"0. Identidade Pós-Quântica"**, defina uma passphrase e clique
+   em **Criar identidade PQ** (já fica desbloqueada).
+2. **Anote as 24 palavras** exibidas — é o único backup. Sem elas (e a
+   passphrase) os arquivos não podem ser recuperados.
+3. A **wallet interna** (derivada do mnemônico) aparece na tela. Na rede local,
+   clique em **Financiar wallet (dev)** para enviar 1 ETH de gás a ela (usa a
+   conta #0 do Hardhat).
+4. Faça o upload normalmente — o registro on-chain é assinado pela wallet interna.
+5. Para usar em outro dispositivo: **Restaurar de um mnemônico**, defina uma
+   passphrase nova e desbloqueie.
+
 ---
 
-## MetaMask
+## Rede local (Hardhat)
 
-Adicione a rede local Hardhat:
+A wallet vem do mnemônico e conecta direto no RPC:
 
 ```txt
 RPC URL: http://127.0.0.1:8545
 Chain ID: 31337
-Currency Symbol: ETH
 ```
 
-Importe uma das contas exibidas pelo comando:
-
-```bash
-npm run node
-```
+O gás da wallet interna na rede local vem da conta #0 do Hardhat, via botão
+**Financiar wallet (dev)**.
 
 ---
 
@@ -343,21 +373,32 @@ Arquivo
 
 ### Proteção contra Harvest Now, Decrypt Later
 
-O uso de ML-KEM-768 reduz riscos do cenário:
+O cenário a evitar:
 
 ```text
 Harvest Now, Decrypt Later
 (Coletar Agora, Descriptografar Depois)
 ```
 
-onde um atacante coleta dados hoje para tentar quebrá-los futuramente utilizando computadores quânticos.
+onde um atacante coleta o conteúdo cifrado hoje para quebrá-lo no futuro com
+computadores quânticos. Esta versão protege contra isso **de ponta a ponta**,
+porque **nenhuma** parte da decifração depende de criptografia de chave pública
+clássica:
+
+| Componente | Resiste a quântico? | Por quê |
+| --- | --- | --- |
+| ML-KEM-768 (troca de chave) | ✅ | FIPS 203 |
+| AES-256-GCM (arquivo) | ✅ | Grover só reduz 256→128 bits |
+| Seed protegido por Argon2id + passphrase | ✅ | KDF simétrico, sem chave pública |
+| Identidade independente da ECDSA da wallet | ✅ | quebrar a wallet não dá os arquivos |
 
 ### Autocustódia
 
 - O backend não possui acesso ao conteúdo dos arquivos.
 - O backend não possui acesso às chaves de descriptografia.
 - O IPFS recebe apenas conteúdo criptografado.
-- Apenas a wallet do usuário consegue recuperar o arquivo.
+- Apenas quem tem a identidade PQ (mnemônico + passphrase) recupera o arquivo.
+- Perder o mnemônico **e** a passphrase = perda irreversível dos arquivos.
 
 ### Proteções do Backend (Proxy IPFS)
 
@@ -387,10 +428,11 @@ Projeto **educacional**. Antes de uso em produção, considere:
 - Ethers.js
 - Hardhat
 - Solidity
-- MetaMask
 - IPFS
 - ML-KEM-768 (FIPS 203)
 - AES-256-GCM
+- BIP-39 (mnemônico) + HKDF
+- Argon2id (proteção em repouso)
 - Blockchain Registry
 
 ## Licença

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@scure/bip39": "^2.2.0",
     "@vitejs/plugin-react": "^4.3.4",
     "crypto-js": "^4.2.0",
     "ethers": "^6.13.2",
