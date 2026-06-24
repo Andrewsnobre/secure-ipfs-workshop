@@ -24,8 +24,7 @@ Todo o processo de criptografia ocorre no navegador.
 **Um único mnemônico**, dois usos derivados dele:
 
 - **Camada Pós-Quântica** (ML-KEM-768) → confidencialidade dos arquivos.
-- **Wallet Ethereum** → identidade/propriedade on-chain (derivada do mnemônico,
-  sem MetaMask).
+- **Wallet Ethereum** → identidade/propriedade on-chain (derivada do mnemônico).
 
 O backend atua apenas como proxy para proteger a chave de acesso ao serviço IPFS.
 
@@ -33,7 +32,7 @@ O backend atua apenas como proxy para proteger a chave de acesso ao serviço IPF
 
 ## Fluxo Completo
 
-### 1. Identidade única (sem MetaMask obrigatória)
+### 1. Identidade única
 
 O app gera **um único mnemônico** que serve de raiz para tudo:
 
@@ -44,7 +43,7 @@ Mnemônico BIP-39 (24 palavras)
 ```
 
 - A **wallet Ethereum** é derivada do mnemônico e conectada direto ao RPC
-  (`VITE_RPC_URL`, padrão `http://127.0.0.1:8545`) — **sem MetaMask**.
+  (`VITE_RPC_URL`, padrão `http://127.0.0.1:8545`).
 - Na rede local, use **Financiar wallet (dev)** para dar gás à wallet. O app
   mostra o **saldo** e só habilita o botão de criptografar quando há saldo > 0.
 
@@ -294,7 +293,7 @@ Edite `frontend/.env`:
 VITE_BACKEND_URL=http://localhost:3333
 VITE_CONTRACT_ADDRESS=ENDERECO_DO_CONTRATO
 
-# RPC para a wallet interna derivada do mnemônico (sem MetaMask)
+# RPC para a wallet interna derivada do mnemônico
 VITE_RPC_URL=http://127.0.0.1:8545
 
 # Opcional: deve ser igual ao UPLOAD_ACCESS_TOKEN do backend, se definido
@@ -336,7 +335,7 @@ npm run frontend
 
 ## Rede local (Hardhat)
 
-A MetaMask **não é usada** — a wallet vem do mnemônico e conecta no RPC:
+A wallet vem do mnemônico e conecta direto no RPC:
 
 ```txt
 RPC URL: http://127.0.0.1:8545
