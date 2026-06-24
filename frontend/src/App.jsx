@@ -10,9 +10,10 @@ import {
   getStoredPublicKey,
   deleteIdentity,
   fundFromHardhat,
+  getProvider,
 } from "./pqIdentity";
 import { uploadEncryptedToIPFS } from "./ipfs";
-import { connectWallet, signHash } from "./wallet";
+import { signHash } from "./wallet";
 import { getRegistryContract } from "./contract";
 
 export default function App() {
@@ -31,30 +32,35 @@ export default function App() {
   const [passphrase, setPassphrase] = useState("");
   const [importPhrase, setImportPhrase] = useState("");
   const [mnemonicBackup, setMnemonicBackup] = useState("");
+  const [balanceWei, setBalanceWei] = useState(null);
+
+  const hasFunds = balanceWei !== null && balanceWei > 0n;
 
   useEffect(() => {
     setPqExists(hasIdentity());
   }, []);
 
-  // Prefer the in-app wallet derived from the PQ identity; fall back to
-  // MetaMask only if no identity is unlocked.
-  async function getSignerOrConnect() {
-    if (identity?.ethWallet) {
-      return { signer: identity.ethWallet, address: identity.ethAddress };
+  // The on-chain signer always comes from the PQ identity's in-app wallet.
+  function requireSigner() {
+    if (!identity?.ethWallet) {
+      throw new Error("Desbloqueie sua identidade PQ primeiro.");
     }
-    const wallet = await connectWallet();
-    return { signer: wallet.signer, address: wallet.address };
+    return { signer: identity.ethWallet, address: identity.ethAddress };
   }
 
   function getReadProvider() {
-    if (identity?.ethWallet?.provider) return identity.ethWallet.provider;
-    return new ethers.BrowserProvider(window.ethereum);
+    return identity?.ethWallet?.provider || getProvider();
   }
 
-  async function handleConnect() {
-    const wallet = await connectWallet();
-    setAddress(wallet.address);
-    setStatus("Wallet MetaMask conectada.");
+  async function refreshBalance(addr, provider) {
+    try {
+      const wei = await (provider || getProvider()).getBalance(addr);
+      setBalanceWei(wei);
+      return wei;
+    } catch {
+      setBalanceWei(null);
+      return null;
+    }
   }
 
   async function handleFundWallet() {
@@ -64,6 +70,7 @@ export default function App() {
       }
       setStatus("Financiando a wallet interna (dev/Hardhat)...");
       await fundFromHardhat(identity.ethAddress);
+      await refreshBalance(identity.ethAddress, identity.ethWallet.provider);
       setStatus("Wallet interna financiada com 1 ETH (rede local).");
     } catch (error) {
       setStatus(`Erro ao financiar: ${error.message}`);
@@ -83,6 +90,7 @@ export default function App() {
       setAddress(id.ethAddress);
       setPqExists(true);
       setPassphrase("");
+      await refreshBalance(id.ethAddress, id.ethWallet.provider);
       setStatus("Identidade PQ criada e desbloqueada. ANOTE o mnemônico abaixo.");
     } catch (error) {
       setStatus(`Erro: ${error.message}`);
@@ -96,6 +104,7 @@ export default function App() {
       setIdentity(id);
       setAddress(id.ethAddress);
       setPassphrase("");
+      await refreshBalance(id.ethAddress, id.ethWallet.provider);
       setStatus("Identidade PQ desbloqueada.");
     } catch (error) {
       setStatus(`Erro: ${error.message}`);
@@ -111,6 +120,7 @@ export default function App() {
       setImportPhrase("");
       setPassphrase("");
       setPqExists(true);
+      await refreshBalance(id.ethAddress, id.ethWallet.provider);
       setStatus("Identidade PQ importada e desbloqueada.");
     } catch (error) {
       setStatus(`Erro: ${error.message}`);
@@ -127,6 +137,7 @@ export default function App() {
     deleteIdentity();
     setIdentity(null);
     setAddress("");
+    setBalanceWei(null);
     setPqExists(false);
     setMnemonicBackup("");
     setStatus("Identidade PQ removida deste dispositivo.");
@@ -186,11 +197,14 @@ export default function App() {
       if (!publicKey) {
         throw new Error("Crie uma identidade PQ antes de enviar arquivos.");
       }
+      if (!hasFunds) {
+        throw new Error("Wallet sem saldo: financie a wallet antes de registrar.");
+      }
 
       setRecord(null);
 
       setStatus("1/6 Preparando assinante on-chain...");
-      const { signer, address } = await getSignerOrConnect();
+      const { signer, address } = requireSigner();
       setAddress(address);
 
       setStatus("2/6 Criptografando com ML-KEM-768 + AES-256-GCM (identidade PQ)...");
@@ -213,6 +227,7 @@ export default function App() {
       const tx = await contract.register(hash, uploadedCid);
       await tx.wait();
 
+      await refreshBalance(address, signer.provider);
       setStatus(
         "Concluído: arquivo criptografado, publicado no IPFS e registrado on-chain."
       );
@@ -224,7 +239,7 @@ export default function App() {
   async function loadMyFiles() {
     try {
       setStatus("Carregando meus arquivos...");
-      const { signer } = await getSignerOrConnect();
+      const { signer } = requireSigner();
       const contract = getRegistryContract(signer);
       const hashes = await contract.getMyFiles();
 
@@ -281,10 +296,9 @@ export default function App() {
           <h1>Secure IPFS Registry</h1>
           <p className="subtitle">
             Criptografia pós-quântica client-side com identidade própria (ML-KEM-768),
-            upload para IPFS e registro on-chain — sem depender da MetaMask.
+            upload para IPFS e registro on-chain — wallet derivada do seu mnemônico.
           </p>
         </div>
-        <button onClick={handleConnect}>Conectar MetaMask (opcional)</button>
       </section>
 
       <section className="card">
@@ -321,9 +335,30 @@ export default function App() {
         </div>
 
         {identity?.ethAddress && (
-          <p style={{ marginTop: 8 }}>
-            <b>Wallet interna (do mnemônico):</b> {identity.ethAddress}
-          </p>
+          <>
+            <p style={{ marginTop: 8 }}>
+              <b>Wallet interna (do mnemônico):</b> {identity.ethAddress}
+            </p>
+            <p>
+              <b>Saldo:</b>{" "}
+              {balanceWei === null
+                ? "—"
+                : `${ethers.formatEther(balanceWei)} ETH`}{" "}
+              <button
+                onClick={() =>
+                  refreshBalance(identity.ethAddress, identity.ethWallet.provider)
+                }
+              >
+                Atualizar
+              </button>
+            </p>
+            {!hasFunds && (
+              <p className="status">
+                ⚠️ Sem saldo para gás — financie a wallet para poder registrar
+                on-chain.
+              </p>
+            )}
+          </>
         )}
 
         {mnemonicBackup && (
@@ -363,9 +398,22 @@ export default function App() {
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
-          <button onClick={handleSecureUpload}>
+          <button
+            onClick={handleSecureUpload}
+            disabled={!identity || !hasFunds}
+            title={
+              !identity
+                ? "Desbloqueie a identidade PQ"
+                : !hasFunds
+                ? "Wallet sem saldo para gás"
+                : ""
+            }
+          >
             Criptografar (PQ) + IPFS + Blockchain
           </button>
+          {identity && !hasFunds && (
+            <p className="status">Wallet sem saldo: financie para habilitar.</p>
+          )}
         </div>
 
         <div className="card">

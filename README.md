@@ -24,8 +24,8 @@ Todo o processo de criptografia ocorre no navegador.
 **Um único mnemônico**, dois usos derivados dele:
 
 - **Camada Pós-Quântica** (ML-KEM-768) → confidencialidade dos arquivos.
-- **Wallet Ethereum** → identidade/propriedade on-chain (sem MetaMask; ela é
-  apenas fallback opcional).
+- **Wallet Ethereum** → identidade/propriedade on-chain (derivada do mnemônico,
+  sem MetaMask).
 
 O backend atua apenas como proxy para proteger a chave de acesso ao serviço IPFS.
 
@@ -44,9 +44,9 @@ Mnemônico BIP-39 (24 palavras)
 ```
 
 - A **wallet Ethereum** é derivada do mnemônico e conectada direto ao RPC
-  (`VITE_RPC_URL`, padrão `http://127.0.0.1:8545`) — **não precisa de MetaMask**.
-- A MetaMask continua disponível como **fallback opcional** (botão no topo) caso
-  a identidade não esteja desbloqueada.
+  (`VITE_RPC_URL`, padrão `http://127.0.0.1:8545`) — **sem MetaMask**.
+- Na rede local, use **Financiar wallet (dev)** para dar gás à wallet. O app
+  mostra o **saldo** e só habilita o botão de criptografar quando há saldo > 0.
 
 > A parte on-chain continua usando ECDSA (o Ethereum só aceita secp256k1), mas
 > isso é aceitável: os dados on-chain (CID, hash, dono) são **públicos**.
@@ -334,18 +334,17 @@ npm run frontend
 
 ---
 
-## MetaMask (opcional)
+## Rede local (Hardhat)
 
-A MetaMask **não é necessária** — a wallet vem do mnemônico. Ela serve apenas
-como fallback. Se quiser usá-la mesmo assim, adicione a rede local Hardhat:
+A MetaMask **não é usada** — a wallet vem do mnemônico e conecta no RPC:
 
 ```txt
 RPC URL: http://127.0.0.1:8545
 Chain ID: 31337
-Currency Symbol: ETH
 ```
 
-E importe uma das contas exibidas por `npm run node`.
+O gás da wallet interna na rede local vem da conta #0 do Hardhat, via botão
+**Financiar wallet (dev)**.
 
 ---
 
@@ -430,7 +429,6 @@ Projeto **educacional**. Antes de uso em produção, considere:
 - Ethers.js
 - Hardhat
 - Solidity
-- MetaMask (fallback opcional)
 - IPFS
 - ML-KEM-768 (FIPS 203)
 - AES-256-GCM

@@ -189,6 +189,12 @@ export async function unlockIdentity(passphrase) {
   return buildIdentity(mnemonic);
 }
 
+// Read-only provider for the configured RPC (used for balance/verify when no
+// identity is unlocked).
+export function getProvider() {
+  return new JsonRpcProvider(RPC_URL);
+}
+
 // Local dev helper: fund the in-app wallet with gas from the Hardhat node's
 // default account #0. Only works on a local Hardhat chain.
 export async function fundFromHardhat(toAddress, amountEth = "1") {
