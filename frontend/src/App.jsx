@@ -316,7 +316,7 @@ export default function App() {
             : "Nenhuma identidade. Crie uma para começar."}
         </p>
 
-        <label>Passphrase</label>
+        <label>Senha local</label>
         <input
           type="password"
           value={passphrase}
