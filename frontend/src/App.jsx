@@ -127,6 +127,14 @@ export default function App() {
     }
   }
 
+  function handleLockIdentity() {
+    setIdentity(null);
+    setBalanceWei(null);
+    setAddress("");
+    setMyFiles([]);
+    setStatus("Identidade PQ bloqueada (removida da memória).");
+  }
+
   function handleResetIdentity() {
     if (
       !window.confirm(
@@ -302,6 +310,14 @@ export default function App() {
       </section>
 
       <section className="card">
+        <h2>Status</h2>
+        <p className="status">{status}</p>
+        {address && <p className="kv"><b>Wallet</b><span className="mono">{address}</span></p>}
+        {cid && <p className="kv"><b>CID</b><span className="mono">{cid}</span></p>}
+        {fileHash && <p className="kv"><b>Hash</b><span className="mono">{fileHash}</span></p>}
+      </section>
+
+      <section className="card">
         <h2>
           0. Identidade Pós-Quântica{" "}
           <span className={`pill ${identity ? "ok" : pqExists ? "warn" : "muted"}`}>
@@ -333,7 +349,12 @@ export default function App() {
           )}
           {identity && (
             <button className="secondary" onClick={handleFundWallet}>
-              Financiar wallet (dev)
+              Financiar com 1 ETH
+            </button>
+          )}
+          {identity && (
+            <button className="secondary" onClick={handleLockIdentity}>
+              Bloquear
             </button>
           )}
           {pqExists && (
@@ -438,14 +459,6 @@ export default function App() {
           />
           <button onClick={handleVerify}>Verificar on-chain</button>
         </div>
-      </section>
-
-      <section className="card">
-        <h2>Status</h2>
-        <p className="status">{status}</p>
-        {address && <p className="kv"><b>Wallet</b><span className="mono">{address}</span></p>}
-        {cid && <p className="kv"><b>CID</b><span className="mono">{cid}</span></p>}
-        {fileHash && <p className="kv"><b>Hash</b><span className="mono">{fileHash}</span></p>}
       </section>
 
       <section className="card">
